@@ -8,9 +8,7 @@ import (
 	"slices"
 	"strings"
 
-	providerUtils "github.com/maximhq/bifrost/core/providers/utils"
 	"github.com/maximhq/bifrost/core/schemas"
-	"github.com/tidwall/gjson"
 )
 
 const (
@@ -205,39 +203,6 @@ func parseLiveSessionUpdate(session json.RawMessage) (*liveSessionUpdate, error)
 		return nil, fmt.Errorf("invalid session in session.update: %w", err)
 	}
 	return update, nil
-}
-
-// mergeLiveSession lays a session.update's fields over the settings sent before it, the way OpenAI
-// applies one: a field the update leaves out keeps its value, an object is merged field by field, and
-// a null is a value, since null turn_detection turns server-side detection off.
-func mergeLiveSession(base, update json.RawMessage) (json.RawMessage, error) {
-	if len(update) == 0 {
-		return base, nil
-	}
-	if len(base) == 0 {
-		return update, nil
-	}
-	var merged, patch map[string]json.RawMessage
-	if err := schemas.Unmarshal(base, &merged); err != nil {
-		return nil, fmt.Errorf("invalid session in session.update: %w", err)
-	}
-	if err := schemas.Unmarshal(update, &patch); err != nil {
-		return nil, fmt.Errorf("invalid session in session.update: %w", err)
-	}
-	if merged == nil {
-		merged = make(map[string]json.RawMessage, len(patch))
-	}
-	for key, value := range patch {
-		if previous, ok := merged[key]; ok && gjson.ParseBytes(previous).IsObject() && gjson.ParseBytes(value).IsObject() {
-			nested, err := mergeLiveSession(previous, value)
-			if err != nil {
-				return nil, err
-			}
-			value = nested
-		}
-		merged[key] = value
-	}
-	return providerUtils.MarshalSorted(merged)
 }
 
 // newLiveConfig resolves a session.update into a Live setup. An error names a setting Live cannot
